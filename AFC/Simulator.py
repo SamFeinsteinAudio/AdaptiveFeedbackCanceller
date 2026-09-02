@@ -25,29 +25,28 @@ def generate_noise(num_samples, seed=None):
         np.random.seed(seed)
     return np.random.normal(0,1, num_samples)
 
-def calc_dbrms(signal):
-    return 20 * np.log10(np.sqrt(np.mean(signal**2)))
+def calc_dbrms(signal_arr):
+    return 20 * np.log10(np.sqrt(np.mean(signal_arr**2)))
 
 def calc_scalar(db):
     return 10 ** (db/20)
 
 
-def generate_watermark(signal, sr, filter_order=4, snr=30, seed=18):
+def generate_watermark(input_signal, band_reject_sos, snr=30, seed=18):
     # 4th order filters, 24db/8v slope should sound relatively natural while still steep
-    base_noise = generate_noise(signal.size, seed=seed)
-    # Filter between 8k and 250 to target hardest-to-hear frequencies per ISO-226
-    nyq = 0.5*sr
-    low, high = 250/nyq, 8000/nyq
-    sos = signal.butter(filter_order, [low, high], btype='bandstop', output='sos')
-    filt_noise = signal.sosfiltfilt(sos,base_noise)
-    og_signal_level = calc_dbrms(signal)
+
+    base_noise = generate_noise(input_signal.size, seed=seed)
+    filt_noise = signal.sosfiltfilt(band_reject_sos, base_noise)
+    og_signal_level = calc_dbrms(input_signal)
     watermark_db = og_signal_level - snr
     wmark = calc_scalar(watermark_db) * filt_noise
     return wmark
 
-def idealized_room_simulator(og_signal, spk_out, samplerate, feedback_delay_ms=50, feedback_gain=-6):
+def idealized_room_simulator(og_signal, spk_out, samplerate, feedback_delay_ms=50.0, feedback_gain_db=-6):
     feedback_delay_samples = round(samplerate*feedback_delay_ms/1000)
-    feedback_gain_ratio = calc_scalar(feedback_gain)
+    print(f"raw delay samples {feedback_delay_samples}")
+    feedback_gain_ratio = calc_scalar(feedback_gain_db)
+    print(f"raw gain scalar {feedback_gain_ratio}")
     mic_in = np.zeros_like(og_signal)
     for i in range(len(mic_in)):
         if i < feedback_delay_samples:
@@ -56,35 +55,57 @@ def idealized_room_simulator(og_signal, spk_out, samplerate, feedback_delay_ms=5
             mic_in[i] = og_signal[i] + (spk_out[i-feedback_delay_samples])*feedback_gain_ratio
     return mic_in
 
-def estimate_gain_and_delay(ref_signal, in_signal):
-    correlation_matrix = signal.correlate(in_signal, ref_signal)
+def estimate_gain_and_delay(ref_signal, in_signal, band_reject_sos):
+    filtered_input_signal = signal.sosfiltfilt(band_reject_sos, in_signal)
+    correlation_matrix = signal.correlate(filtered_input_signal, ref_signal)
+    max_correlation = np.argmax(np.abs(correlation_matrix))
     potential_lags = signal.correlation_lags(len(in_signal), len(ref_signal))
     estimated_lag = potential_lags[np.argmax(correlation_matrix)]
     ref_power = np.sum(ref_signal**2)
-    estimated_gain = correlation_matrix[estimated_lag] / ref_power
+    estimated_gain = correlation_matrix[max_correlation] / ref_power
     return estimated_gain, estimated_lag
 
 
 if __name__ == "__main__":
     filepath = input("Provide a wav file for simulation, say 'sin' for an idealized Tone Simulation, say "
-                     "'rich' for an idealized harmonically rich signal, or say 'square' for a square wav").strip()
+                     "'rich' for an idealized harmonically rich signal, or say 'square' for a square wav \n").strip()
+    print(filepath)
     if filepath.lower() == "sin":
         samplerate, data = generate_sin()
-    if filepath.lower() == "rich":
+    elif filepath.lower() == "rich":
         samplerate, data = generate_rich()
-    if filepath.lower() == "square":
+    elif filepath.lower() == "square":
         samplerate, data = generate_square()
     elif os.path.isfile(filepath):
         samplerate, data = wavfile.read(filepath)
     else:
-        raise ValueError("Provided input was not 'sin', nor was it a valid filepath")
+        raise ValueError(f"Provided input {filepath} was not 'sin', nor was it a valid filepath")
 
-    watermark = generate_watermark(data, samplerate, snr=30)
+
+    nyq = 0.5*samplerate
+    low, high = 250/nyq, 8000/nyq
+    # Filter between 8k and 250 to target hardest-to-hear frequencies per ISO-226
+    sos = signal.butter(4, [low, high], btype='bandstop', output='sos')
+    # 4th order filters, 24db/8v slope should sound relatively natural while still steep
+
+    watermark = generate_watermark(data, sos, snr=30)
     pedal_output = data+watermark
 
-    mic_signal=idealized_room_simulator(data, pedal_output, samplerate)
+    gain_db, delay_ms = -12, 50.0
 
-    est_gain, est_delay = estimate_gain_and_delay(watermark, mic_signal)
+    mic_signal=idealized_room_simulator(data, pedal_output, samplerate,
+                                        feedback_gain_db=gain_db, feedback_delay_ms=delay_ms)
+
+    est_gain, est_delay = estimate_gain_and_delay(watermark, mic_signal, sos)
+    print(f"Raw estimated gain scalar: {est_gain}")
+    print(f"Raw estimated delay samples: {est_delay}")
+    est_gain_db = 20 * np.log10(est_gain)
+    est_delay_ms = 1000 * est_delay / samplerate
+
+    print(f"Estimated gain was {est_gain_db}dB. Actual was {gain_db}db")
+    print(f"Estimated delay was {est_delay_ms}ms. Actual was {delay_ms}ms")
+
+
 
 
 
