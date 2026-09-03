@@ -3,17 +3,17 @@ import numpy as np
 from scipy.io import wavfile
 from scipy import signal
 
-def generate_sin(freq=440, scaling=1.0, length=10, sr=48000):
+def generate_sin(freq=440, scaling=1.0, length=10, sr=44100):
     time_array = np.linspace(0, length, int(length * sr), endpoint=False)
     sin_data = scaling * np.sin(2 * np.pi * freq * time_array)
     return sr, sin_data
 
-def generate_square(freq=440, scaling=1.0, length=10, sr=48000):
+def generate_square(freq=440, scaling=1.0, length=10, sr=44100):
     sr, sin_data = generate_sin(freq=freq,length=length, sr=sr)
     square_data = scaling * np.sign(sin_data)
     return sr, square_data
 
-def generate_rich(harmonics=100, fundamental=130, length=10, sr=48000):
+def generate_rich(harmonics=100, fundamental=130, length=10, sr=44100):
     sr, rich_data = generate_sin(freq=fundamental, scaling=0.5, length=length, sr=sr)
     for i in np.linspace(2, harmonics, harmonics):
         _, harmonic_data = generate_sin(freq=harmonics * fundamental, scaling=1 / (i ** 2 + i), length=length, sr=sr)
@@ -34,7 +34,6 @@ def calc_scalar(db):
 
 def generate_watermark(input_signal, band_reject_sos, snr=30, seed=18):
     # 4th order filters, 24db/8v slope should sound relatively natural while still steep
-
     base_noise = generate_noise(input_signal.size, seed=seed)
     filt_noise = signal.sosfiltfilt(band_reject_sos, base_noise)
     og_signal_level = calc_dbrms(input_signal)
@@ -44,9 +43,7 @@ def generate_watermark(input_signal, band_reject_sos, snr=30, seed=18):
 
 def idealized_room_simulator(og_signal, spk_out, samplerate, feedback_delay_ms=50.0, feedback_gain_db=-6):
     feedback_delay_samples = round(samplerate*feedback_delay_ms/1000)
-    print(f"raw delay samples {feedback_delay_samples}")
     feedback_gain_ratio = calc_scalar(feedback_gain_db)
-    print(f"raw gain scalar {feedback_gain_ratio}")
     mic_in = np.zeros_like(og_signal)
     for i in range(len(mic_in)):
         if i < feedback_delay_samples:
@@ -54,6 +51,8 @@ def idealized_room_simulator(og_signal, spk_out, samplerate, feedback_delay_ms=5
         else:
             mic_in[i] = og_signal[i] + (spk_out[i-feedback_delay_samples])*feedback_gain_ratio
     return mic_in
+
+def nonstationary_room_simulator()
 
 def estimate_gain_and_delay(ref_signal, in_signal, band_reject_sos):
     filtered_input_signal = signal.sosfiltfilt(band_reject_sos, in_signal)
@@ -81,16 +80,43 @@ if __name__ == "__main__":
     else:
         raise ValueError(f"Provided input {filepath} was not 'sin', nor was it a valid filepath")
 
-
     nyq = 0.5*samplerate
     low, high = 250/nyq, 8000/nyq
     # Filter between 8k and 250 to target hardest-to-hear frequencies per ISO-226
     sos = signal.butter(4, [low, high], btype='bandstop', output='sos')
     # 4th order filters, 24db/8v slope should sound relatively natural while still steep
 
-    watermark = generate_watermark(data, sos, snr=30)
-    pedal_output = data+watermark
+    adaptive_filter_order = 2048   # allows for up to 46ms of delay (about 15 meters)
+    weights = np.zeros(adaptive_filter_order)
+    memory_buffer = np.zeros(adaptive_filter_order)
+    adaptation = 0.15
+    eps = 1e-4
 
+    n_samples = len(data)
+    mic_input, estimated_feedback, output_signal = np.zeros(n_samples), np.zeros(n_samples), np.zeros(n_samples)
+
+    # ROOM SIMULATION  TODO: Put in its own function
+    gain_db = np.append(np.linspace(-6.0, -9.0, n_samples//2), np.full(-(n_samples//-2),-9.0))
+    gain_scalar = calc_scalar(gain_db)
+
+    delay_ms = np.append(np.linspace(20.0,30.0, n_samples//2), np.full(-(n_samples//-2),30.0))
+    delay_samples = samplerate * delay_ms
+
+    watermark = generate_watermark(data, sos, snr=30)
+    pedal_output = data + watermark
+
+    og_indicies = np.arange(n_samples)
+    fb_indicies = np.arange(n_samples) - delay_samples
+    gained_pedal_output = gain_scalar * pedal_output
+    feedback_simualtion = np.interp(fb_indicies, og_indicies, gained_pedal_output, left=0, right=0)
+    mic_signal = feedback_simualtion + data
+
+
+
+
+
+
+""""
     gain_db, delay_ms = -12, 50.0
 
     mic_signal=idealized_room_simulator(data, pedal_output, samplerate,
@@ -104,6 +130,7 @@ if __name__ == "__main__":
 
     print(f"Estimated gain was {est_gain_db}dB. Actual was {gain_db}db")
     print(f"Estimated delay was {est_delay_ms}ms. Actual was {delay_ms}ms")
+"""
 
 
 
