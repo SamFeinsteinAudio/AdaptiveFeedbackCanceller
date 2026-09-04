@@ -2,6 +2,7 @@ import os
 import numpy as np
 from scipy.io import wavfile
 from scipy import signal
+import matplotlib.pyplot as plt
 
 def generate_sin(freq=440, scaling=1.0, length=10, sr=44100):
     time_array = np.linspace(0, length, int(length * sr), endpoint=False)
@@ -52,8 +53,6 @@ def idealized_room_simulator(og_signal, spk_out, samplerate, feedback_delay_ms=5
             mic_in[i] = og_signal[i] + (spk_out[i-feedback_delay_samples])*feedback_gain_ratio
     return mic_in
 
-def nonstationary_room_simulator()
-
 def estimate_gain_and_delay(ref_signal, in_signal, band_reject_sos):
     filtered_input_signal = signal.sosfiltfilt(band_reject_sos, in_signal)
     correlation_matrix = signal.correlate(filtered_input_signal, ref_signal)
@@ -88,8 +87,9 @@ if __name__ == "__main__":
 
     adaptive_filter_order = 2048   # allows for up to 46ms of delay (about 15 meters)
     weights = np.zeros(adaptive_filter_order)
-    memory_buffer = np.zeros(adaptive_filter_order)
-    adaptation = 0.15
+    input_memory_buffer = np.zeros(adaptive_filter_order)
+    watermark_memory_buffer = np.zeros(adaptive_filter_order)
+    adaptation_speed = 0.15
     eps = 1e-4
 
     n_samples = len(data)
@@ -108,15 +108,32 @@ if __name__ == "__main__":
     og_indicies = np.arange(n_samples)
     fb_indicies = np.arange(n_samples) - delay_samples
     gained_pedal_output = gain_scalar * pedal_output
-    feedback_simualtion = np.interp(fb_indicies, og_indicies, gained_pedal_output, left=0, right=0)
-    mic_signal = feedback_simualtion + data
+    feedback_simulation = np.interp(fb_indicies, og_indicies, gained_pedal_output, left=0, right=0)
+    true_error = np.zeros(n_samples)
+    mic_signal = feedback_simulation + data
+
+    for i in range(n_samples):
+        input_memory_buffer[0] = mic_signal[i]
+        watermark_memory_buffer[0] = watermark[i]
+        feedback_estimation = np.dot(input_memory_buffer, weights)
+        output = mic_input[i] - feedback_estimation
+        output_signal[i] = output
+        true_error[i] = abs(feedback_simulation[i] - feedback_estimation)
 
 
+        watermark_magnitude = np.dot(watermark_memory_buffer, watermark_memory_buffer)
+        weights = weights + (adaptation_speed * output * watermark_memory_buffer) / watermark_magnitude
 
+        watermark_memory_buffer = np.roll(watermark_memory_buffer, 1)
+        input_memory_buffer = np.roll(input_memory_buffer, 1)
 
-
+    print(true_error.max())
+    # plt.plot(true_error)
+    # plt.show()
 
 """"
+   # STATIONARY SIMULATION # 
+   
     gain_db, delay_ms = -12, 50.0
 
     mic_signal=idealized_room_simulator(data, pedal_output, samplerate,
