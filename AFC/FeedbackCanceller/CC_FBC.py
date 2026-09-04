@@ -2,7 +2,7 @@ from scipy import signal
 import numpy as np
 from Filters.bandstopfilter import BandStopFilter
 from SourceSignals.Noise.noise_generator import NoiseGenerator
-from Measurements.audio_calculations import calc_dbrms, calc_scalar
+from Measurements.audio_calculations import calc_dbrms, calc_scalar, estimate_lag_and_gain
 import copy
 
 class CrossCorrFeedbackCanceller:
@@ -33,16 +33,7 @@ class CrossCorrFeedbackCanceller:
         watermark_sample = self.watermark_generator.get_next_sample(scaling=watermark_scalar)
         filtered_watermark_sample = self.watermark_filter.process_sample(watermark_sample)
 
-        correlation_matrix = signal.correlate(self.filtered_input_buffer, self.watermark_buffer)
-        max_correlation = np.argmax(np.abs(correlation_matrix))
-        potential_lags = signal.correlation_lags(self.buffer_size, self.buffer_size)  # len(self.input_buffer), len(self.watermark_buffer)
-        valid_indices = np.where(potential_lags > 0)[0]
-        estimated_lag = potential_lags[np.argmax(correlation_matrix[valid_indices])]
-        ref_power = np.sum(self.watermark_buffer ** 2)
-        if ref_power == 0:
-            estimated_gain = 0
-        else:
-            estimated_gain = correlation_matrix[max_correlation] / ref_power
+        estimated_lag, estimated_gain = estimate_lag_and_gain(self.filtered_input_buffer, self.watermark_buffer)
 
         output_sample = sample + filtered_watermark_sample - estimated_gain * self.output_buffer[-1* estimated_lag]
         self.output_buffer = np.roll(self.output_buffer, -1)
@@ -67,17 +58,7 @@ class CrossCorrFeedbackCanceller:
             watermark_buffer = self.watermark_generator.get_buffer(buffer_size, scaling=watermark_scalar)
             filtered_watermark_buffer = self.watermark_filter.process_buffer(watermark_buffer)
 
-            correlation_matrix = signal.correlate(self.filtered_input_buffer, self.watermark_buffer)
-            max_correlation = np.argmax(np.abs(correlation_matrix))
-            potential_lags = signal.correlation_lags(self.buffer_size, self.buffer_size)   # len(self.input_buffer), len(self.watermark_buffer)
-            valid_indices = np.where(potential_lags > 0)[0]
-            estimated_lag = potential_lags[np.argmax(correlation_matrix[valid_indices])]
-            ref_power = np.sum(self.watermark_buffer ** 2)
-            if ref_power == 0:
-                estimated_gain = 0
-            else:
-                estimated_gain = correlation_matrix[max_correlation] / ref_power
-
+            estimated_lag, estimated_gain = estimate_lag_and_gain(self.filtered_input_buffer, self.watermark_buffer)
             output_buffer = (buffer + filtered_watermark_buffer - estimated_gain *
                              self.output_buffer[-1*buffer_size-estimated_lag: -1*estimated_lag])
             self.output_buffer = np.roll(self.output_buffer, -1*buffer_size)
@@ -98,17 +79,7 @@ class CrossCorrFeedbackCanceller:
             filtered_watermark_buffer = self.watermark_filter.process_buffer(watermark_buffer)
             self.watermark_buffer = filtered_watermark_buffer[-1*self.buffer_size]
 
-            correlation_matrix = signal.correlate(filtered_buffer, self.watermark_buffer)
-            max_correlation = np.argmax(np.abs(correlation_matrix))
-            potential_lags = signal.correlation_lags(buffer_size, buffer_size)  # len(buffer), len(filtered_watermark_buffer)
-            valid_indices = np.where(potential_lags > 0)[0]
-            estimated_lag = potential_lags[np.argmax(correlation_matrix[valid_indices])]
-            ref_power = np.sum(self.watermark_buffer ** 2)
-            if ref_power == 0:
-                estimated_gain = 0
-            else:
-                estimated_gain = correlation_matrix[max_correlation] / ref_power
-
+            estimated_lag, estimated_gain = estimate_lag_and_gain(filtered_buffer, self.watermark_buffer)
             output_buffer = buffer + filtered_watermark_buffer - estimated_gain * self.output_buffer[:-1*estimated_lag]
 
             # if more buffers of this size are incoming, we need adequate history to cancel feedback
