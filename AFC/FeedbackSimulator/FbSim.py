@@ -3,6 +3,7 @@ from Measurements.audio_calculations import calc_scalar
 
 class FbSim:
     def __init__(self, samplerate=44100, buffer_length=2048, gain_db=-3, delay_ms=15):
+        # TODO: Include some IR Convolution to make the simulation more realistic
         self.samplerate = samplerate
         self.buffer = np.zeros(buffer_length)
         self.gain_scalar = 1
@@ -35,4 +36,3 @@ class FbSim:
         self.buffer[-1*bsize:] = buffer
         return buffer + fb_buffer
 
-    
