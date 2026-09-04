@@ -15,18 +15,20 @@ class BandStopFilter():
         return sos
 
     def process_sample(self, sample):
+        self.input_buffer = np.roll(self.input_buffer, -1)
         self.input_buffer[-1] = sample
         filtered_buffer = signal.sosfiltfilt(self.second_order_secions, self.input_buffer)
-        self.input_buffer = np.roll(self.input_buffer, -1)
         return filtered_buffer[-1]
 
     def process_buffer(self, buffer):
-        if len(buffer) <= self.buffer_length:
-            self.input_buffer[-1*len(buffer):] = buffer
+        buffer_size = len(buffer)
+        if buffer_size <= self.buffer_length:
+            self.input_buffer = np.roll(self.input_buffer, -1 * buffer_size)
+            self.input_buffer[-1*buffer_size:] = buffer
+            filtered_buffer = signal.sosfiltfilt(self.second_order_secions, self.input_buffer)
         else:
-            self.input_buffer[-1*self.buffer_length:] = buffer[:self.buffer_length]
-        self.input_buffer = np.roll(self.input_buffer, -1)
-        filtered_buffer = signal.sosfiltfilt(self.second_order_secions, buffer)
+            self.input_buffer = buffer[-1*self.buffer_length:]
+            filtered_buffer = signal.sosfiltfilt(self.second_order_secions, buffer)
         return filtered_buffer
 
 
