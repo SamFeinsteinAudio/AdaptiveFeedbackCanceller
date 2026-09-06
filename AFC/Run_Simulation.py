@@ -26,8 +26,8 @@ def run_simulation(source="square", fb_alg="CC", samplerate=44100, time=30, **kw
 
     sound_system = FbSim(samplerate=samplerate)
 
-    total_samples = time * samplerate
-    total_samples +=  (3 - total_samples%3)  # to make it easier to split into 3 sections below
+    total_samples = int(round(time * samplerate))
+    total_samples += (-total_samples) % 3  # make it easier to split into 3 sections below
     #Trying stationary state, moving state, then stationary state (where feedback would otherwise become unstable)
     room_gain_db = np.append(np.append(np.full(int(total_samples/3), -3.0), np.linspace(-3.0,3.0, int(total_samples/3))), np.full(int(total_samples/3), 3.0))
     room_delay_ms = np.append(np.append(np.full(int(total_samples/3), 30.0), np.linspace(30.0, 15.0, int(total_samples/3))), np.full(int(total_samples/3), 15.0))
@@ -48,20 +48,22 @@ def run_simulation(source="square", fb_alg="CC", samplerate=44100, time=30, **kw
             singer_scale = calc_scalar(singer_db)
             singer_pitch = random.uniform(0.0,3.0) # representing 4 octaves in typical vocal ranges
             singer_freq = 100+2**singer_pitch
-        singer_sample = singer.get_next_sample(scaling=singer_scale,freq=singer_freq)
+        singer_sample = singer.get_next_sample(
+            scaling=singer_scale, freq=singer_freq / samplerate
+        )
         singer_full[sample_num] = singer_sample
-        pedal_sample = pedal.process_sample(singer_sample+feedback_sample)
-        output_full = pedal_sample
+        pedal_sample = pedal.process_sample(singer_sample + feedback_sample)
+        output_full[sample_num] = pedal_sample
         feedback_sample = sound_system.process_sample(pedal_sample)
 
     error_signal = output_full - singer_full
     error_level = calc_dbrms(error_signal)
     signal_level = calc_dbrms(singer_full)
 
-    print(f"SER: {signal_level-error_level}")
+    print(f"SNR (clean / residual): {signal_level - error_level:.2f} dB")
 
-    error_loudness, error_time = estimate_loudness(error_signal)
-    signal_loudness, signal_time = estimate_loudness(singer_full)
+    error_loudness, error_time = estimate_loudness(error_signal, samplerate=samplerate)
+    signal_loudness, signal_time = estimate_loudness(singer_full, samplerate=samplerate)
 
     plt.figure(figsize=(10, 5))
     plt.plot(signal_time, signal_loudness, label="Clean Signal", color="#1f77b4", lw=2)
@@ -77,9 +79,9 @@ def run_simulation(source="square", fb_alg="CC", samplerate=44100, time=30, **kw
 
 if __name__ == "__main__":
     print("CC Simulation:")
-    run_simulation()
+    run_simulation(time=9)
     print("LMS Simulation:")
-    run_simulation(fb_alg="LMS")
+    run_simulation(fb_alg="LMS", time=9)
 
 
 

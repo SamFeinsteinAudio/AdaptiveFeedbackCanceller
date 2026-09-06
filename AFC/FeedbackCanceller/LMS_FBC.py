@@ -19,10 +19,8 @@ class LMSFeedbackCanceller:
         self.watermark_filter.calculate_filter_params(250, 8000, 4)
 
     def process_sample(self, sample):
-        np.roll(self.input_buffer, -1)
+        self.input_buffer = np.roll(self.input_buffer, -1)
         self.input_buffer[-1] = sample
-        feedback_estimation = np.dot(self.input_buffer, self.weights)
-        output = sample - feedback_estimation
 
         signal_level_db = calc_dbrms(self.input_buffer)
         watermark_level_db = signal_level_db - self.watermark_db_mask
@@ -30,9 +28,11 @@ class LMSFeedbackCanceller:
         watermark_sample = self.watermark_generator.get_next_sample(scaling=watermark_scalar)
         filtered_watermark_sample = self.watermark_filter.process_sample(watermark_sample)
 
-        np.roll(self.watermark_buffer, -1)
+        self.watermark_buffer = np.roll(self.watermark_buffer, -1)
         self.watermark_buffer[-1] = filtered_watermark_sample
+        feedback_estimation = np.dot(self.watermark_buffer, self.weights)
+        error = sample - feedback_estimation
 
         watermark_magnitude = np.dot(self.watermark_buffer, self.watermark_buffer) + eps
-        self.weights = self.weights + (self.adaptation_speed * output * self.watermark_buffer) / watermark_magnitude
-        return output
+        self.weights = self.weights + (self.adaptation_speed * error * self.watermark_buffer) / watermark_magnitude
+        return error + filtered_watermark_sample

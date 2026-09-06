@@ -23,16 +23,16 @@ class FbSim:
 
     def process_sample(self, sample):
         fb_sample = self.gain_scalar * self.buffer[-1 * self.delay_samples]
-        np.roll(self.buffer, -1)
+        self.buffer = np.roll(self.buffer, -1)
         self.buffer[-1] = sample
         return fb_sample
 
     def process_buffer(self, buffer):
         bsize = len(buffer)
-        if bsize+self.delay_samples > bsize:
-            self.resize_buffer(bsize+self.delay_samples)
+        if bsize + self.delay_samples > len(self.buffer):
+            self.resize_buffer(bsize + self.delay_samples)
         fb_buffer = self.gain_scalar * self.buffer[-1*bsize-self.delay_samples:-1 * self.delay_samples]
-        np.roll(self.buffer, -1 * bsize)
+        self.buffer = np.roll(self.buffer, -1 * bsize)
         self.buffer[-1*bsize:] = buffer
         return fb_buffer
 

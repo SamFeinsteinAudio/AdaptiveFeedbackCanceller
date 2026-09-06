@@ -22,15 +22,15 @@ def calc_scalar(db):
 def estimate_lag_and_gain(input_signal, ref):
     # returns in samples and scalar (non db)
     correlation_matrix = signal.correlate(input_signal, ref)
-    max_correlation = np.argmax(np.abs(correlation_matrix))
     potential_lags = signal.correlation_lags(len(input_signal), len(ref))
     valid_indices = np.where(potential_lags > 0)[0]
-    estimated_lag = potential_lags[np.argmax(correlation_matrix[valid_indices])]
+    peak_index = valid_indices[np.argmax(np.abs(correlation_matrix[valid_indices]))]
+    estimated_lag = potential_lags[peak_index]
     ref_power = np.sum(ref ** 2)
     if ref_power < 1e-6:
         estimated_gain = 0
     else:
-        estimated_gain = correlation_matrix[max_correlation] / ref_power
+        estimated_gain = correlation_matrix[peak_index] / ref_power
     return estimated_lag, estimated_gain
 
 def calc_lufs(input_signal, samplerate=44100):
