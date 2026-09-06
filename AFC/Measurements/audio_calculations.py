@@ -1,9 +1,8 @@
 import numpy as np
 from scipy import signal
 import pyloudnorm
-from mosquito.functions.shared.load import load
-from mosquito.functions.loudness_zwicker.comp_loudness import comp_loudness
-
+from mosqito.utils import load
+from mosqito.sq_metrics import loudness_zwst, loudness_zwtv
 
 
 def calc_rms(signal_arr):
@@ -38,7 +37,6 @@ def calc_lufs(input_signal, samplerate=44100):
     meter = pyloudnorm.Meter(samplerate)
     return meter.integrated_loudness(input_signal)
 
-def estimate_loudness_difference(input_signal, noise_signal, calibration=2, samplerate=44100):
-    sig_total_loudness, sig_specific_loudness, _ = comp_loudness(is_stationary=False, signal=input_signal, fs=samplerate)
-    noise_total_loudness, noise_specific_loudness, _ = comp_loudness(is_stationary=False, signal=noise_signal, fs=samplerate)
-    return sig_total_loudness / noise_total_loudness
+def estimate_loudness(input_signal, calibration=2, samplerate=44100):
+    output = loudness_zwtv(input_signal*calibration, samplerate)
+    return output['values'], output['time']

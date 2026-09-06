@@ -3,9 +3,11 @@ from SourceSignals.Synth.square_generator import SquareGenerator
 from FeedbackSimulator.FbSim import FbSim
 from FeedbackCanceller.CC_FBC import CrossCorrFeedbackCanceller
 from FeedbackCanceller.LMS_FBC import LMSFeedbackCanceller
-from Measurements.audio_calculations import calc_scalar, calc_dbrms, estimate_loudness_difference
+from Measurements.audio_calculations import calc_scalar, calc_dbrms, estimate_loudness
 import random
 import numpy as np
+import matplotlib.pyplot as plt
+
 
 SOURCES = {"square": SquareGenerator, "sin": SinWithHarmonicsGenerator}
 FB_PEDALS = {"CC": CrossCorrFeedbackCanceller, "LMS": LMSFeedbackCanceller}
@@ -58,9 +60,18 @@ def run_simulation(source="square", fb_alg="CC", samplerate=44100, time=30, **kw
 
     print(f"SER: {signal_level-error_level}")
 
-    percieved_loudness_diff =  estimate_loudness_difference(singer_full, error_signal)
+    error_loudness, error_time = estimate_loudness(error_signal)
+    signal_loudness, signal_time = estimate_loudness(singer_full)
 
-    print(f"The Signal will be perceived as {percieved_loudness_diff} times as loud as the noise")
+    plt.figure(figsize=(10, 5))
+    plt.plot(signal_time, signal_loudness, label="Clean Signal", color="#1f77b4", lw=2)
+    plt.plot(error_time, error_loudness, label="Isolated Error (Noise)", color="#d62728", lw=2 )
+    plt.xlabel("Time (seconds)")
+    plt.ylabel("Perceived Loudness (Sones)")
+    plt.grid(True, linestyle=":", alpha=0.6)
+    plt.legend(loc="upper right")
+    plt.tight_layout()
+    plt.show()
 
     #TODO Make Graph so we can what sections each algo struggled with by how much
 
