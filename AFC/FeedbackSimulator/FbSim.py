@@ -12,7 +12,7 @@ class FbSim:
 
     def set_delay_and_gain(self, gain_db, delay_ms):
         self.gain_scalar = calc_scalar(gain_db)
-        self.delay_samples = self.samplerate * delay_ms / 1000.0
+        self.delay_samples = int(self.samplerate * delay_ms / 1000.0)
         if self.delay_samples > len(self.buffer):
             self.resize_buffer(self.delay_samples)
         return True
@@ -24,8 +24,8 @@ class FbSim:
     def process_sample(self, sample):
         fb_sample = self.gain_scalar * self.buffer[-1 * self.delay_samples]
         np.roll(self.buffer, -1)
-        self.buffer[-1] = sample + fb_sample
-        return sample + fb_sample
+        self.buffer[-1] = sample
+        return fb_sample
 
     def process_buffer(self, buffer):
         bsize = len(buffer)
@@ -34,5 +34,5 @@ class FbSim:
         fb_buffer = self.gain_scalar * self.buffer[-1*bsize-self.delay_samples:-1 * self.delay_samples]
         np.roll(self.buffer, -1 * bsize)
         self.buffer[-1*bsize:] = buffer
-        return buffer + fb_buffer
+        return fb_buffer
 

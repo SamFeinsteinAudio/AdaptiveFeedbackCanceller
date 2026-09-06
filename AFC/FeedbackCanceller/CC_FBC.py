@@ -35,6 +35,9 @@ class CrossCorrFeedbackCanceller:
 
         estimated_lag, estimated_gain = estimate_lag_and_gain(self.filtered_input_buffer, self.watermark_buffer)
 
+        if estimated_lag < 1:  # can't happen, so making this case harmless
+            estimated_gain = 0
+
         output_sample = sample + filtered_watermark_sample - estimated_gain * self.output_buffer[-1* estimated_lag]
         self.output_buffer = np.roll(self.output_buffer, -1)
         self.output_buffer[-1] = output_sample
