@@ -62,6 +62,8 @@ def run_simulation(source="square", fb_alg="CC", samplerate=44100, time=30, **kw
 
     print(f"The Signal will be perceived as {percieved_loudness_diff} times as loud as the noise")
 
+    #TODO Make Graph so we can what sections each algo struggled with by how much
+
 if __name__ == "__main__":
     print("CC Simulation:")
     run_simulation()
