@@ -38,5 +38,5 @@ def calc_lufs(input_signal, samplerate=44100):
     return meter.integrated_loudness(input_signal)
 
 def estimate_loudness(input_signal, calibration=2, samplerate=44100):
-    output = loudness_zwtv(input_signal*calibration, samplerate)
-    return output['values'], output['time']
+    N_time, N_specific, bark_axis, time_axis = loudness_zwtv(input_signal*calibration, samplerate)
+    return N_time, time_axis
