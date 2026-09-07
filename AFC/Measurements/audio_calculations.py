@@ -6,12 +6,19 @@ from mosqito.sq_metrics import loudness_zwst, loudness_zwtv
 
 
 def calc_rms(signal_arr):
-    return np.sqrt(np.mean(signal_arr**2))
+    signal_arr = np.asarray(signal_arr, dtype=float)
+    if signal_arr.size == 0:
+        return 0.0
+    return float(np.sqrt(np.mean(signal_arr**2)))
 
-def calc_db(scalar):
+
+def calc_db(scalar, floor_db=-180.0):
+    """Convert an amplitude to dB with a finite floor for silence."""
+    if scalar < 0:
+        raise ValueError("A dB amplitude must be non-negative")
     if scalar == 0:
-        return 0
-    return 20*np.log10(scalar)
+        return floor_db
+    return max(20 * np.log10(scalar), floor_db)
 
 def calc_dbrms(signal_arr):
     return calc_db(calc_rms(signal_arr))
